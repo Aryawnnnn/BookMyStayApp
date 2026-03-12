@@ -1,3 +1,6 @@
+import java.util.HashMap;
+import java.util.Map;
+
 abstract class Room {
     private String type;
     private double price;
@@ -21,59 +24,73 @@ abstract class Room {
 }
 
 class SingleRoom extends Room {
-    public SingleRoom() {
-        super("Single Room", 100.0, 1);
-    }
-
+    public SingleRoom() { super("Single Room", 100.0, 1); }
     @Override
-    public void displayFeatures() {
-        System.out.println("Features: Twin bed, Work desk, High-speed Wi-Fi.");
-    }
+    public void displayFeatures() { System.out.println("Features: Twin bed, Work desk."); }
 }
 
 class DoubleRoom extends Room {
-    public DoubleRoom() {
-        super("Double Room", 150.0, 2);
-    }
-
+    public DoubleRoom() { super("Double Room", 150.0, 2); }
     @Override
-    public void displayFeatures() {
-        System.out.println("Features: Queen bed, Small lounge area, Mini-fridge.");
-    }
+    public void displayFeatures() { System.out.println("Features: Queen bed, Mini-fridge."); }
 }
 
 class SuiteRoom extends Room {
-    public SuiteRoom() {
-        super("Suite", 300.0, 4);
+    public SuiteRoom() { super("Suite", 300.0, 4); }
+    @Override
+    public void displayFeatures() { System.out.println("Features: King bed, Kitchenette."); }
+}
+
+class InventoryManager {
+    private Map<String, Integer> roomInventory;
+
+    public InventoryManager() {
+        this.roomInventory = new HashMap<>();
     }
 
-    @Override
-    public void displayFeatures() {
-        System.out.println("Features: King bed, Separate living room, Kitchenette, Ocean view.");
+    public void initializeRoom(String type, int count) {
+        roomInventory.put(type, count);
+    }
+
+    public int getAvailability(String type) {
+        return roomInventory.getOrDefault(type, 0);
+    }
+
+    public void updateAvailability(String type, int change) {
+        if (roomInventory.containsKey(type)) {
+            int current = roomInventory.get(type);
+            roomInventory.put(type, current + change);
+        }
+    }
+
+    public void displayFullInventory() {
+        System.out.println("\n--- Current Inventory State ---");
+        for (Map.Entry<String, Integer> entry : roomInventory.entrySet()) {
+            System.out.println(entry.getKey() + ": " + entry.getValue() + " available");
+        }
+        System.out.println("-------------------------------\n");
     }
 }
 
 public class BookMyStayApp {
     public static void main(String[] args) {
-        System.out.println("--- Hotel Management System v2.0 ---");
+        System.out.println("Initializing BookMyStay System v3.0...");
 
         Room single = new SingleRoom();
         Room dbl = new DoubleRoom();
         Room suite = new SuiteRoom();
 
-        int singleAvailable = 5;
-        int doubleAvailable = 3;
-        int suiteAvailable = 1;
+        InventoryManager inventory = new InventoryManager();
+        inventory.initializeRoom(single.getType(), 10);
+        inventory.initializeRoom(dbl.getType(), 5);
+        inventory.initializeRoom(suite.getType(), 2);
 
-        printRoomStatus(single, singleAvailable);
-        printRoomStatus(dbl, doubleAvailable);
-        printRoomStatus(suite, suiteAvailable);
-    }
+        single.displayBasicInfo();
+        System.out.println("Initial Stock: " + inventory.getAvailability(single.getType()));
 
-    private static void printRoomStatus(Room room, int count) {
-        room.displayBasicInfo();
-        room.displayFeatures();
-        System.out.println("Current Availability: " + count);
-        System.out.println("------------------------------------");
+        System.out.println("\nSimulating a booking for a Suite...");
+        inventory.updateAvailability(suite.getType(), -1);
+
+        inventory.displayFullInventory();
     }
 }
