@@ -1,77 +1,84 @@
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 class ReservationRequest {
     private String guestName;
     private String roomType;
-    private int stayDuration;
 
-    public ReservationRequest(String guestName, String roomType, int stayDuration) {
+    public ReservationRequest(String guestName, String roomType) {
         this.guestName = guestName;
         this.roomType = roomType;
-        this.stayDuration = stayDuration;
     }
 
     public String getGuestName() { return guestName; }
     public String getRoomType() { return roomType; }
-    public int getStayDuration() { return stayDuration; }
-
-    @Override
-    public String toString() {
-        return "Guest: " + guestName + " | Room: " + roomType + " | Duration: " + stayDuration + " nights";
-    }
 }
 
-class BookingQueueManager {
-    private Queue<ReservationRequest> requestQueue;
+class InventoryManager {
+    private Map<String, Integer> availability = new HashMap<>();
+    private Map<String, Set<String>> allocatedRooms = new HashMap<>();
 
-    public BookingQueueManager() {
-        this.requestQueue = new LinkedList<>();
+    public void initializeRoomType(String type, int count) {
+        availability.put(type, count);
+        allocatedRooms.put(type, new HashSet<>());
     }
 
-    public void addRequest(ReservationRequest request) {
-        requestQueue.add(request);
-        System.out.println("Enqueued: " + request.getGuestName() + "'s request for " + request.getRoomType());
+    public int getCount(String type) {
+        return availability.getOrDefault(type, 0);
     }
 
-    public void displayQueue() {
-        System.out.println("\n--- Current Booking Request Queue (FIFO) ---");
-        if (requestQueue.isEmpty()) {
-            System.out.println("The queue is currently empty.");
-        } else {
-            int position = 1;
-            for (ReservationRequest request : requestQueue) {
-                System.out.println(position + ". " + request);
-                position++;
+    public boolean allocateRoom(String type, String roomId) {
+        if (availability.getOrDefault(type, 0) > 0) {
+            // Uniqueness check via Set
+            if (allocatedRooms.get(type).add(roomId)) {
+                availability.put(type, availability.get(type) - 1);
+                return true;
             }
         }
-        System.out.println("--------------------------------------------\n");
+        return false;
     }
 
-    public ReservationRequest nextRequest() {
-        return requestQueue.peek();
+    public void displayStatus() {
+        System.out.println("\n--- Final System State ---");
+        availability.forEach((type, count) -> {
+            System.out.println(type + " -> Available: " + count + " | Assigned: " + allocatedRooms.get(type));
+        });
+        System.out.println("--------------------------");
     }
 }
 
 public class BookMyStayApp {
     public static void main(String[] args) {
-        System.out.println("BookMyStay System v5.0 - Request Intake Module\n");
+        System.out.println("BookMyStay v6.0 - Room Allocation Service\n");
 
-        BookingQueueManager queueManager = new BookingQueueManager();
+        InventoryManager inventory = new InventoryManager();
+        inventory.initializeRoomType("Suite", 2);
+        inventory.initializeRoomType("Single", 5);
 
-        System.out.println("Receiving incoming booking requests...");
-        queueManager.addRequest(new ReservationRequest("Alice", "Suite", 3));
-        queueManager.addRequest(new ReservationRequest("Bob", "Single Room", 1));
-        queueManager.addRequest(new ReservationRequest("Charlie", "Double Room", 2));
-        queueManager.addRequest(new ReservationRequest("Diana", "Suite", 5));
+        Queue<ReservationRequest> queue = new LinkedList<>();
+        queue.add(new ReservationRequest("Alice", "Suite"));
+        queue.add(new ReservationRequest("Bob", "Suite"));
+        queue.add(new ReservationRequest("Charlie", "Suite")); // Should fail (only 2 suites)
 
-        queueManager.displayQueue();
+        int roomCounter = 101;
 
-        ReservationRequest next = queueManager.nextRequest();
-        if (next != null) {
-            System.out.println("Ready to process next request: " + next.getGuestName());
+        while (!queue.isEmpty()) {
+            ReservationRequest request = queue.poll();
+            String generatedId = request.getRoomType().substring(0, 1) + roomCounter++;
+
+            System.out.print("Processing " + request.getGuestName() + "... ");
+
+            if (inventory.allocateRoom(request.getRoomType(), generatedId)) {
+                System.out.println("SUCCESS. Assigned Room: " + generatedId);
+            } else {
+                System.out.println("FAILED. No availability for " + request.getRoomType());
+            }
         }
 
-        System.out.println("Note: No inventory has been modified. Requests are waiting for allocation.");
+        inventory.displayStatus();
     }
 }
