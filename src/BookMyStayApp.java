@@ -1,81 +1,96 @@
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Stack;
+import java.util.HashSet;
+import java.util.Set;
 
-// Custom Exception for Domain-Specific Errors
-class BookingValidationException extends Exception {
-    public BookingValidationException(String message) {
+class CancellationException extends Exception {
+    public CancellationException(String message) {
         super(message);
     }
 }
 
 class InventoryManager {
     private Map<String, Integer> availability = new HashMap<>();
+    private Map<String, Set<String>> activeAllocations = new HashMap<>();
+    private Stack<String> releasedRoomIds = new Stack<>();
 
     public void initializeRoomType(String type, int count) {
         availability.put(type, count);
+        activeAllocations.put(type, new HashSet<>());
     }
 
-    // Guarding System State with Validation
-    public void validateRequest(String roomType, int requestedRooms) throws BookingValidationException {
-        if (!availability.containsKey(roomType)) {
-            throw new BookingValidationException("Error: Room type '" + roomType + "' does not exist in our catalog.");
-        }
-
-        int currentStock = availability.get(roomType);
-        if (currentStock < requestedRooms) {
-            throw new BookingValidationException("Error: Insufficient inventory for " + roomType +
-                    ". Requested: " + requestedRooms + ", Available: " + currentStock);
-        }
-
-        if (requestedRooms <= 0) {
-            throw new BookingValidationException("Error: Stay duration or room count must be greater than zero.");
-        }
+    public void confirmBooking(String type, String roomId) {
+        activeAllocations.get(type).add(roomId);
+        availability.put(type, availability.get(type) - 1);
     }
 
-    public void updateInventory(String type, int change) {
-        availability.put(type, availability.get(type) + change);
+    public void cancelBooking(String type, String roomId) throws CancellationException {
+        // Validation: Ensure the reservation exists
+        if (!activeAllocations.containsKey(type) || !activeAllocations.get(type).contains(roomId)) {
+            throw new CancellationException("Cancellation Failed: Room " + roomId + " is not currently booked under " + type);
+        }
+
+        // Controlled Mutation: Reversing the state
+        activeAllocations.get(type).remove(roomId);
+        availability.put(type, availability.get(type) + 1);
+
+        // Tracking released IDs for potential reuse (LIFO)
+        releasedRoomIds.push(roomId);
+
+        System.out.println(">>> SUCCESS: Room " + roomId + " has been returned to " + type + " inventory.");
     }
 
-    public void displayInventory() {
-        System.out.println("Current Inventory: " + availability);
+    public void displayStatus() {
+        System.out.println("\n--- Current Inventory Status ---");
+        availability.forEach((type, count) -> {
+            System.out.println(type + ": " + count + " available | Active IDs: " + activeAllocations.get(type));
+        });
+        if (!releasedRoomIds.isEmpty()) {
+            System.out.println("Recently Released IDs (Stack): " + releasedRoomIds);
+        }
+        System.out.println("--------------------------------\n");
     }
 }
 
 public class BookMyStayApp {
     public static void main(String[] args) {
-        System.out.println("BookMyStay v9.0 - Validation & Error Handling\n");
+        System.out.println("BookMyStay v10.0 - Booking Cancellation Module\n");
 
         InventoryManager inventory = new InventoryManager();
-        inventory.initializeRoomType("Suite", 1);
-        inventory.initializeRoomType("Single", 5);
+        inventory.initializeRoomType("Suite", 2);
 
-        // Test Scenario 1: Invalid Room Type
-        processBooking(inventory, "Penthouse", 1);
+        // Pre-populating some confirmed bookings
+        inventory.confirmBooking("Suite", "S-101");
+        inventory.confirmBooking("Suite", "S-102");
 
-        // Test Scenario 2: Insufficient Stock
-        processBooking(inventory, "Suite", 2);
+        System.out.println("Initial State:");
+        inventory.displayStatus();
 
-        // Test Scenario 3: Valid Booking
-        processBooking(inventory, "Single", 1);
-
-        System.out.println("\nFinal State Check:");
-        inventory.displayInventory();
-    }
-
-    private static void processBooking(InventoryManager inventory, String type, int count) {
-        System.out.println("Attempting to book " + count + " " + type + "...");
+        // Scenario 1: Valid Cancellation
         try {
-            // Fail-Fast: Validate before doing anything else
-            inventory.validateRequest(type, count);
-
-            // If we reach here, validation passed
-            inventory.updateInventory(type, -count);
-            System.out.println(">>> SUCCESS: Booking confirmed for " + type);
-
-        } catch (BookingValidationException e) {
-            // Graceful failure handling
-            System.out.println(">>> FAILED: " + e.getMessage());
+            System.out.println("Requesting cancellation for S-102...");
+            inventory.cancelBooking("Suite", "S-102");
+        } catch (CancellationException e) {
+            System.out.println(e.getMessage());
         }
-        System.out.println("------------------------------------------------");
+
+        // Scenario 2: Invalid Cancellation (Already cancelled or non-existent)
+        try {
+            System.out.println("\nRequesting cancellation for S-102 again...");
+            inventory.cancelBooking("Suite", "S-102");
+        } catch (CancellationException e) {
+            System.out.println("EXPECTED ERROR: " + e.getMessage());
+        }
+
+        // Scenario 3: Invalid Room Type
+        try {
+            System.out.println("\nRequesting cancellation for Deluxe-999...");
+            inventory.cancelBooking("Deluxe", "D-999");
+        } catch (CancellationException e) {
+            System.out.println("EXPECTED ERROR: " + e.getMessage());
+        }
+
+        inventory.displayStatus();
     }
 }
