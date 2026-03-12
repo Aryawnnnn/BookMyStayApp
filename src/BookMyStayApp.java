@@ -1,65 +1,56 @@
-import java.util.LinkedList;
-import java.util.Queue;
+import java.io.*;
+import java.util.HashMap;
+import java.util.Map;
 
-class Inventory {
-    private int suiteCount;
+class InventoryManager implements Serializable {
+    private static final long serialVersionUID = 1L;
+    private Map<String, Integer> stock = new HashMap<>();
 
-    public Inventory(int count) {
-        this.suiteCount = count;
-    }
-
-    // Critical Section: Only one thread can execute this method at a time
-    public synchronized boolean bookSuite(String guestName) {
-        if (suiteCount > 0) {
-            System.out.println(guestName + " is attempting to book... (Available: " + suiteCount + ")");
-            try { Thread.sleep(100); } catch (InterruptedException e) {} // Simulate processing delay
-            suiteCount--;
-            System.out.println(">>> SUCCESS: " + guestName + " confirmed. (Remaining: " + suiteCount + ")");
-            return true;
-        } else {
-            System.out.println(">>> FAILED: " + guestName + " could not book. (No suites left)");
-            return false;
-        }
-    }
-
-    public int getSuiteCount() { return suiteCount; }
-}
-
-class BookingTask implements Runnable {
-    private Inventory inventory;
-    private String guestName;
-
-    public BookingTask(Inventory inventory, String guestName) {
-        this.inventory = inventory;
-        this.guestName = guestName;
-    }
-
-    @Override
-    public void run() {
-        inventory.bookSuite(guestName);
-    }
+    public void setStock(String type, int count) { stock.put(type, count); }
+    public Map<String, Integer> getStock() { return stock; }
 }
 
 public class BookMyStayApp {
-    public static void main(String[] args) throws InterruptedException {
-        System.out.println("BookMyStay v11.0 - Concurrent Booking Simulation\n");
+    private static final String FILE_NAME = "system_state.ser";
 
-        Inventory sharedInventory = new Inventory(2); // Only 2 suites available
+    public static void main(String[] args) {
+        System.out.println("BookMyStay v12.0 - Persistence & Recovery Module\n");
 
-        // Creating multiple threads to simulate concurrent guests
-        Thread guest1 = new Thread(new BookingTask(sharedInventory, "Guest-Alice"));
-        Thread guest2 = new Thread(new BookingTask(sharedInventory, "Guest-Bob"));
-        Thread guest3 = new Thread(new BookingTask(sharedInventory, "Guest-Charlie"));
+        InventoryManager inventory = loadState();
 
-        System.out.println("Starting concurrent bookings...");
-        guest1.start();
-        guest2.start();
-        guest3.start();
+        if (inventory == null) {
+            System.out.println("No saved state found. Initializing new system...");
+            inventory = new InventoryManager();
+            inventory.setStock("Suite", 5);
+        } else {
+            System.out.println("State recovered successfully: " + inventory.getStock());
+        }
 
-        guest1.join();
-        guest2.join();
-        guest3.join();
+        // Simulate activity
+        inventory.setStock("Suite", inventory.getStock().get("Suite") - 1);
 
-        System.out.println("\nFinal Inventory Count: " + sharedInventory.getSuiteCount());
+        saveState(inventory);
+        System.out.println("State saved. System terminating.");
+    }
+
+    private static void saveState(InventoryManager inventory) {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(FILE_NAME))) {
+            oos.writeObject(inventory);
+            System.out.println("Inventory data persisted to disk.");
+        } catch (IOException e) {
+            System.err.println("Failed to save state: " + e.getMessage());
+        }
+    }
+
+    private static InventoryManager loadState() {
+        File file = new File(FILE_NAME);
+        if (!file.exists()) return null;
+
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(FILE_NAME))) {
+            return (InventoryManager) ois.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("Recovery failed, starting fresh: " + e.getMessage());
+            return null;
+        }
     }
 }
