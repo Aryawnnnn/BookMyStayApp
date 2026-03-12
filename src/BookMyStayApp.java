@@ -1,96 +1,65 @@
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Stack;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.LinkedList;
+import java.util.Queue;
 
-class CancellationException extends Exception {
-    public CancellationException(String message) {
-        super(message);
+class Inventory {
+    private int suiteCount;
+
+    public Inventory(int count) {
+        this.suiteCount = count;
     }
+
+    // Critical Section: Only one thread can execute this method at a time
+    public synchronized boolean bookSuite(String guestName) {
+        if (suiteCount > 0) {
+            System.out.println(guestName + " is attempting to book... (Available: " + suiteCount + ")");
+            try { Thread.sleep(100); } catch (InterruptedException e) {} // Simulate processing delay
+            suiteCount--;
+            System.out.println(">>> SUCCESS: " + guestName + " confirmed. (Remaining: " + suiteCount + ")");
+            return true;
+        } else {
+            System.out.println(">>> FAILED: " + guestName + " could not book. (No suites left)");
+            return false;
+        }
+    }
+
+    public int getSuiteCount() { return suiteCount; }
 }
 
-class InventoryManager {
-    private Map<String, Integer> availability = new HashMap<>();
-    private Map<String, Set<String>> activeAllocations = new HashMap<>();
-    private Stack<String> releasedRoomIds = new Stack<>();
+class BookingTask implements Runnable {
+    private Inventory inventory;
+    private String guestName;
 
-    public void initializeRoomType(String type, int count) {
-        availability.put(type, count);
-        activeAllocations.put(type, new HashSet<>());
+    public BookingTask(Inventory inventory, String guestName) {
+        this.inventory = inventory;
+        this.guestName = guestName;
     }
 
-    public void confirmBooking(String type, String roomId) {
-        activeAllocations.get(type).add(roomId);
-        availability.put(type, availability.get(type) - 1);
-    }
-
-    public void cancelBooking(String type, String roomId) throws CancellationException {
-        // Validation: Ensure the reservation exists
-        if (!activeAllocations.containsKey(type) || !activeAllocations.get(type).contains(roomId)) {
-            throw new CancellationException("Cancellation Failed: Room " + roomId + " is not currently booked under " + type);
-        }
-
-        // Controlled Mutation: Reversing the state
-        activeAllocations.get(type).remove(roomId);
-        availability.put(type, availability.get(type) + 1);
-
-        // Tracking released IDs for potential reuse (LIFO)
-        releasedRoomIds.push(roomId);
-
-        System.out.println(">>> SUCCESS: Room " + roomId + " has been returned to " + type + " inventory.");
-    }
-
-    public void displayStatus() {
-        System.out.println("\n--- Current Inventory Status ---");
-        availability.forEach((type, count) -> {
-            System.out.println(type + ": " + count + " available | Active IDs: " + activeAllocations.get(type));
-        });
-        if (!releasedRoomIds.isEmpty()) {
-            System.out.println("Recently Released IDs (Stack): " + releasedRoomIds);
-        }
-        System.out.println("--------------------------------\n");
+    @Override
+    public void run() {
+        inventory.bookSuite(guestName);
     }
 }
 
 public class BookMyStayApp {
-    public static void main(String[] args) {
-        System.out.println("BookMyStay v10.0 - Booking Cancellation Module\n");
+    public static void main(String[] args) throws InterruptedException {
+        System.out.println("BookMyStay v11.0 - Concurrent Booking Simulation\n");
 
-        InventoryManager inventory = new InventoryManager();
-        inventory.initializeRoomType("Suite", 2);
+        Inventory sharedInventory = new Inventory(2); // Only 2 suites available
 
-        // Pre-populating some confirmed bookings
-        inventory.confirmBooking("Suite", "S-101");
-        inventory.confirmBooking("Suite", "S-102");
+        // Creating multiple threads to simulate concurrent guests
+        Thread guest1 = new Thread(new BookingTask(sharedInventory, "Guest-Alice"));
+        Thread guest2 = new Thread(new BookingTask(sharedInventory, "Guest-Bob"));
+        Thread guest3 = new Thread(new BookingTask(sharedInventory, "Guest-Charlie"));
 
-        System.out.println("Initial State:");
-        inventory.displayStatus();
+        System.out.println("Starting concurrent bookings...");
+        guest1.start();
+        guest2.start();
+        guest3.start();
 
-        // Scenario 1: Valid Cancellation
-        try {
-            System.out.println("Requesting cancellation for S-102...");
-            inventory.cancelBooking("Suite", "S-102");
-        } catch (CancellationException e) {
-            System.out.println(e.getMessage());
-        }
+        guest1.join();
+        guest2.join();
+        guest3.join();
 
-        // Scenario 2: Invalid Cancellation (Already cancelled or non-existent)
-        try {
-            System.out.println("\nRequesting cancellation for S-102 again...");
-            inventory.cancelBooking("Suite", "S-102");
-        } catch (CancellationException e) {
-            System.out.println("EXPECTED ERROR: " + e.getMessage());
-        }
-
-        // Scenario 3: Invalid Room Type
-        try {
-            System.out.println("\nRequesting cancellation for Deluxe-999...");
-            inventory.cancelBooking("Deluxe", "D-999");
-        } catch (CancellationException e) {
-            System.out.println("EXPECTED ERROR: " + e.getMessage());
-        }
-
-        inventory.displayStatus();
+        System.out.println("\nFinal Inventory Count: " + sharedInventory.getSuiteCount());
     }
 }
