@@ -1,5 +1,7 @@
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 abstract class Room {
     private String type;
@@ -42,11 +44,7 @@ class SuiteRoom extends Room {
 }
 
 class InventoryManager {
-    private Map<String, Integer> roomInventory;
-
-    public InventoryManager() {
-        this.roomInventory = new HashMap<>();
-    }
+    private Map<String, Integer> roomInventory = new HashMap<>();
 
     public void initializeRoom(String type, int count) {
         roomInventory.put(type, count);
@@ -56,41 +54,54 @@ class InventoryManager {
         return roomInventory.getOrDefault(type, 0);
     }
 
-    public void updateAvailability(String type, int change) {
-        if (roomInventory.containsKey(type)) {
-            int current = roomInventory.get(type);
-            roomInventory.put(type, current + change);
-        }
+    public Map<String, Integer> getAllInventory() {
+        return new HashMap<>(roomInventory);
     }
+}
 
-    public void displayFullInventory() {
-        System.out.println("\n--- Current Inventory State ---");
-        for (Map.Entry<String, Integer> entry : roomInventory.entrySet()) {
-            System.out.println(entry.getKey() + ": " + entry.getValue() + " available");
+class RoomSearchService {
+    public void searchAvailableRooms(List<Room> roomCatalog, InventoryManager inventory) {
+        System.out.println("--- Available Accommodations ---");
+        boolean found = false;
+
+        for (Room room : roomCatalog) {
+            int count = inventory.getAvailability(room.getType());
+
+            if (count > 0) {
+                room.displayBasicInfo();
+                room.displayFeatures();
+                System.out.println("Rooms Remaining: " + count);
+                System.out.println("--------------------------------");
+                found = true;
+            }
         }
-        System.out.println("-------------------------------\n");
+
+        if (!found) {
+            System.out.println("No rooms are currently available.");
+        }
     }
 }
 
 public class BookMyStayApp {
     public static void main(String[] args) {
-        System.out.println("Initializing BookMyStay System v3.0...");
+        System.out.println("BookMyStay System v4.0 - Search Module\n");
+
+        InventoryManager inventory = new InventoryManager();
+        List<Room> roomCatalog = new ArrayList<>();
 
         Room single = new SingleRoom();
         Room dbl = new DoubleRoom();
         Room suite = new SuiteRoom();
 
-        InventoryManager inventory = new InventoryManager();
-        inventory.initializeRoom(single.getType(), 10);
-        inventory.initializeRoom(dbl.getType(), 5);
+        roomCatalog.add(single);
+        roomCatalog.add(dbl);
+        roomCatalog.add(suite);
+
+        inventory.initializeRoom(single.getType(), 5);
+        inventory.initializeRoom(dbl.getType(), 0); // Out of stock
         inventory.initializeRoom(suite.getType(), 2);
 
-        single.displayBasicInfo();
-        System.out.println("Initial Stock: " + inventory.getAvailability(single.getType()));
-
-        System.out.println("\nSimulating a booking for a Suite...");
-        inventory.updateAvailability(suite.getType(), -1);
-
-        inventory.displayFullInventory();
+        RoomSearchService searchService = new RoomSearchService();
+        searchService.searchAvailableRooms(roomCatalog, inventory);
     }
 }
